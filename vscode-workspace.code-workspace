@@ -1,0 +1,29 @@
+{
+	"folders": [
+		{
+			"path": "."
+		}
+	],
+	"settings": {
+		"files.associations": {
+			"array": "cpp",
+			"bitset": "cpp",
+			"chrono": "cpp",
+			"unordered_map": "cpp",
+			"vector": "cpp",
+			"exception": "cpp",
+			"functional": "cpp",
+			"initializer_list": "cpp",
+			"iosfwd": "cpp",
+			"istream": "cpp",
+			"new": "cpp",
+			"ostream": "cpp",
+			"sstream": "cpp",
+			"stdexcept": "cpp",
+			"thread": "cpp",
+			"tuple": "cpp",
+			"type_traits": "cpp",
+			"utility": "cpp"
+		}
+	}
+}

@@ -10,6 +10,7 @@
 
 #include "Acts/Geometry/TrackingGeometry.hpp"
 #include "Acts/TrackFitting/KalmanFitter.hpp"
+#include "Acts/TrackFitting/Chi2Fitter.hpp" // RR
 #include "ActsExamples/EventData/IndexSourceLink.hpp"
 #include "ActsExamples/EventData/Measurement.hpp"
 #include "ActsExamples/EventData/Track.hpp"

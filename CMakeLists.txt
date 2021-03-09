@@ -176,7 +176,7 @@ if(ACTS_BUILD_PLUGIN_SYCL)
   find_package(SYCL REQUIRED)
 endif()
 if(ACTS_BUILD_PLUGIN_TGEO)
-  find_package(ROOT ${_acts_root_version} REQUIRED CONFIG COMPONENTS Geom)
+  find_package(ROOT ${_acts_root_version} REQUIRED CONFIG COMPONENTS Geom Minuit2)
 endif()
 # examples dependencies
 if(ACTS_BUILD_EXAMPLES)

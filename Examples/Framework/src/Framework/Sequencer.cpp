@@ -226,12 +226,16 @@ void storeTiming(const std::vector<std::string>& identifiers,
 }  // namespace
 
 int ActsExamples::Sequencer::run() {
+  std::cout << "-- run" << std::endl;
   // measure overall wall clock
   Timepoint clockWallStart = Clock::now();
+  std::cout << "-- 1" << std::endl;
   // per-algorithm time measures
   std::vector<std::string> names = listAlgorithmNames();
   std::vector<Duration> clocksAlgorithms(names.size(), Duration::zero());
   tbb::queuing_mutex clocksAlgorithmsMutex;
+
+  std::cout << "-- 2" << std::endl;
 
   // processing only works w/ a well-known number of events
   // error message is already handled by the helper function
@@ -239,6 +243,8 @@ int ActsExamples::Sequencer::run() {
   if ((eventsRange.first == SIZE_MAX) and (eventsRange.second == SIZE_MAX)) {
     return EXIT_FAILURE;
   }
+
+  std::cout << "-- 3" << std::endl;
 
   ACTS_INFO("Processing events [" << eventsRange.first << ", "
                                   << eventsRange.second << ")");

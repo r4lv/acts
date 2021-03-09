@@ -13,4 +13,6 @@ add_component_if(Sycl PluginSycl ACTS_BUILD_PLUGIN_SYCL)
 add_component_if(TGeo PluginTGeo ACTS_BUILD_PLUGIN_TGEO)
 add_component_if(DD4hep PluginDD4hep ACTS_BUILD_PLUGIN_DD4HEP)
 
+# add_component_if(Minuit2 PluginMinuit2 True)
+
 propagate_components_to_parent()
