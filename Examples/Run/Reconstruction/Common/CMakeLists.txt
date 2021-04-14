@@ -3,6 +3,7 @@ add_library(
   RecInput.cpp 
   RecTruthTracks.cpp
   RecCKFTracks.cpp
+  RecChi2Tracks.cpp
   SeedingExample.cpp)
 target_include_directories(
   ActsExamplesRecTracksCommon
