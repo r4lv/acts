@@ -128,11 +128,14 @@ struct Chi2FitterResult {
   // r = M - h(X)
 
   // (1)
-  ActsDynamicVector r_measurement_residual; // nx1
-  ActsDynamicMatrix rcov_measurement_covariance; // sigma_meas
+  // ActsDynamicVector r_measurement_residual; // nx1
+  // ActsDynamicMatrix rcov_measurement_covariance; // sigma_meas
 
-  std::vector <Acts::ActsVector<2>> m_measurements_per_surface; // here: 2n x 1 (or nx2 better?)
+  std::vector<Acts::ActsVector<2>> r_measurement_residuals;
+  std::vector<Acts::ActsVector<2>> rcov_measurement_covariance;
 
+  std::vector<Acts::ActsScalar> m_measurements_collector; // pixel layers add 2 entries, strip layers only one.
+  std::vector<Acts::ActsScalar> mcov_measurement_covariance_collector;
           // (2)
           // Matrix: derivative of residuals wrt starting parameters
           // Vector: ∂ χ²  wrt starting track parameters
@@ -175,6 +178,12 @@ template <typename propagator_t>
 class Chi2Fitter {
   /// The navigator type
   using Chi2Navigator = typename propagator_t::Navigator;
+
+  // const size_t M = 6;
+  // maximum number of measurement dimensions. TODO: where can I get this from?
+  // constexpr static auto ProjectorFlags = Eigen::RowMajor | Eigen::AutoAlign;
+  // using Projector = Eigen::Matrix<typename Covariance::Scalar, M, eBoundSize, ProjectorFlags>;
+  // using Projector = Eigen::Matrix<typename Covariance::Scalar, M, eBoundSize, ProjectorFlags>;
 
  public:
   Chi2Fitter(propagator_t pPropagator)
@@ -280,6 +289,25 @@ class Chi2Fitter {
       }
     }
 
+    /*
+      using Projector = Eigen::Matrix<typename Covariance::Scalar, M,
+      eBoundSize,ProjectorFlags>;
+
+
+      template <typename Derived>
+      Projector getFullProjector(const Eigen::MatrixBase<Derived>& projector){
+        constexpr int rows = Eigen::MatrixBase<Derived>::RowsAtCompileTime;
+        constexpr int cols = Eigen::MatrixBase<Derived>::ColsAtCompileTime;
+
+        std::cout << "got rows " << rows << std::endl;
+
+        Projector fullProjector = decltype(fullProjector)::Zero();
+        fullProjector.template topLeftCorner<rows, cols>() = projector;
+        return fullProjector;
+      }
+
+      */
+
     /// @brief Chi2 actor operation: process surface
     ///
     /// (corresponds to KalmanFitter's `filter` method.)
@@ -314,15 +342,17 @@ class Chi2Fitter {
         // Acts:BoundTrackParameters = Acts::SingleBoundTrackParameters<Acts::SinglyCharged>
         //            from Acts/EventData/SingleBoundTrackParameters.hpp
         // Acts::BoundMatrix = Acts::ActsMatrix<6U, 6U>
+        // Jacobian between measurement A and measurement B
 
 
-        // TODO: use `auto` everywhere. Concrete types are kept for debugging
+        // TODO: use `auto` everywhere. for now, concrete types are kept for debugging
 
         const Acts::BoundVector& predictedParams = std::move(boundParams.parameters());
         // `Acts::BoundVector` is a `Acts::ActsVector<6U>`
+
         const Acts::BoundSymMatrix predictedCovariance = std::move(*boundParams.covariance()); // TODO: why move?
 
-        // Jacobian between measurement A and measurement B
+        
 
         ACTS_INFO("   collecting information");
         ACTS_INFO("      parameters: " << predictedParams.transpose());
@@ -351,7 +381,7 @@ class Chi2Fitter {
         
         
 
-        const auto& calibratorResult = m_calibrator(uncalibrated, predictedParams);
+        // const auto& calibratorResult = m_calibrator(uncalibrated, predictedParams);
         // returns a BoundVariantMeasurement<TestSourceLink>
 
         // using Meas_t = Acts::Measurement<Acts::Test::TestSourceLink, Acts::BoundIndices, kMeasurementSize>;
@@ -365,11 +395,11 @@ class Chi2Fitter {
         // using ProjectionMatrix = ActsMatrix<kSize, kFullSize>;
 
         using Covariance =  Acts::detail_lt::Types<eBoundSize, true>::CovarianceMap;
-        // without typename!
 
-        const size_t M = 6; // maximum number of measurement dimensions. TODO: where can I get this from?
-        constexpr static auto ProjectorFlags = Eigen::RowMajor | Eigen::AutoAlign;
-        using Projector = Eigen::Matrix<typename Covariance::Scalar, M, eBoundSize, ProjectorFlags>;
+        // from MultiTrajectory.hpp
+        // const size_t M = 6; // maximum number of measurement dimensions. TODO: where can I get this from?
+        // constexpr static auto ProjectorFlags = Eigen::RowMajor | Eigen::AutoAlign;
+        // using Projector = Eigen::Matrix<typename Covariance::Scalar, M, eBoundSize, ProjectorFlags>;
 
 
         // /scratch/rfarkas/phd/Code/acts-chisquare/spack-env-4/.spack-env/view/include/eigen3
@@ -383,44 +413,99 @@ class Chi2Fitter {
         // rived = Eigen::Matrix<double, 1, 6, 1, 1, 6>; Derived = Eigen::Matrix<double, 6, 6,
         // 1>]'
 
+        using Measurement = Acts::Measurement<Acts::Test::TestSourceLink, Acts::BoundIndices, 6>;
+        // Measurement::ProjectionMatrix is ActsMatrix<kSize, kFullSize>, where kSize=6 and
+        // static constexpr size_t kFullSize = detail::kParametersSize<indices_t>;
+        // ACTS_INFO("measurement kFullSize = " << Measurement::kFullSize);
+        ACTS_INFO("FullParametersVector size: " << Measurement::FullParametersVector::RowsAtCompileTime);
+
+        // ../Core/include/Acts/TrackFitting/Chi2Fitter.hpp:389:62: error: 'constexpr const size_t Acts::Measurement<Acts::Test::TestSourceLink,
+        // Acts::BoundIndices, 6>::kFullSize' is private within this context
+        // 389 |         ACTS_INFO("measurement kFullSize = " << Measurement::kFullSize);
+
         std::visit(
             [&](const auto& calibrated_meas) {
-              // 
-              // calibrated_meas is of type Acts::Measurement<Acts::Test::TestSourceLink, Acts::BoundIndices, 6>
+              // calibrated_meas is of type Acts::Measurement<Acts::Test::TestSourceLink, Acts::BoundIndices, kSize>
+              // kSize can be 1, 2, 3, 4, 5, 6
+
               const auto& proj = calibrated_meas.projector();
-              // const Projector& proj2 = calibrated_meas.projector();
+              // proj is a Eigen::MatrixBase<Derived>. here, proj can be 1x6 or 2x6
 
-              Projector fullProjector = decltype(fullProjector)::Zero();
-              // fullProjector.template topLeftCorner<rows, cols>() = proj;
-              // error: 'RowsAtCompileTime' is not a member of 'const Eigen::Matrix<double, 1, 6, 1, 1, 6>&'
-              
-              // Acts::ActsVector<2> measurementParameters = uncalibrated.parameters;
-              // Acts::ActsSymMatrix<2> measurementCovariance = uncalibrated.covariance;
-              // constexpr size_t kMeasurementSize = decltype(measurementParameters)::RowsAtCompileTime;
 
-              constexpr int rows = decltype(proj)::RowsAtCompileTime;
-              // RowsAtCompileTime' is not a member of 'const Eigen::Matrix<double, 1, 6, 1, 1, 6>&'
-              constexpr int cols = decltype(proj)::ColsAtCompileTime;
+              const auto& parameters = calibrated_meas.parameters();
+              // ParametersVector = ActsVector
 
-              // proj is `const Eigen::MatrixBase<Derived>&`
+              const auto& covariance = calibrated_meas.covariance();
+              // const CovarianceMatrix& = ActSymMatrix
+
               ACTS_INFO("         got calibrated measurement + projector");
-              ACTS_INFO("         rows=" << rows << "  cols=" << cols);
+              // ACTS_INFO("         rows=" << rows << "  cols=" << cols);
               // ACTS_INFO("         projector " << decltype(proj));
-              ACTS_INFO("         projector " << proj);
-              ACTS_INFO("         projector 2 " << fullProjector);
+              ACTS_INFO("         projector " << proj.rows() << "×" << proj.cols() << "\n" << proj); // 2x6 or 1x6
+              // ⎛1 0 0 0 0 0⎞     or    0 1 0 0 0 0   or    1 0 0 0 0
+              // ⎝0 1 0 0 0 0⎠
+              
+              ACTS_INFO("         (calib)parameters " << parameters.rows() << "×" << parameters.cols() << "   " << parameters.transpose());  // 2x1 or 1x1
+              ACTS_INFO("         (calib)covariance " << covariance.rows() << "×" << covariance.cols()); // 2x2 or 1x1
+ 
+              result.m_measurements_collector.push_back(parameters(0));
+              result.mcov_measurement_covariance_collector.push_back(covariance(0,0));
+
+              if (parameters.rows() == 2){
+                result.m_measurements_collector.push_back(parameters(1));
+                result.mcov_measurement_covariance_collector.push_back(covariance(0, 0));
+
+                ACTS_INFO("          parameters: " << parameters.transpose());
+                ACTS_INFO("          parameters: " << parameters(0, 0));
+                ACTS_INFO("          parameters: " << parameters(1, 0));
+                ACTS_INFO("          parameters: " << parameters(0));
+                ACTS_INFO("          parameters: " << parameters(1));
+              }
+
+              // residual = parameters - proj * ???
+
+            /*
+              if (parameters.rows() == 1){
+                
+              } else if (parameters.rows() == 2){
+
+              }
+            */
+
+              // const ParametersVector residual = parameters - H * predicted // ODER SOWAS…
+              
+              // XX ACTS_INFO("         fullProjector " << fullProjector::RowsAtCompilationTime);
+              // -> error: 'fullProjector' is not a class, namespace, or enumeration
+              
+              // ACTS_INFO("         fullProjector " << fullProjector.rows() << " x " << fullProjector.cols());
+              // ACTS_INFO("         projector 3 " << proj3);
               // ACTS_INFO("         matrix rows: " << decltype(proj)::RowsAtCompileTime);
               // ACTS_INFO("         matrix cols: " << decltype(proj)::ColsAtCompileTime);
               // trackStateProxy.setCalibrated(calibrated);
             },
             m_calibrator(uncalibrated, predictedParams));
-        ACTS_INFO("      done calibrating.");
+          
+        // const auto& calibrated_meas_variant = m_calibrator(uncalibrated, predictedParams);
+        // ^ variant< Measurement<1>, Measurement<2>, … >
+
+        // const auto& proj = calibrated_meas.projector();
+        // error: 'const class std::variant<Acts::Measurement<Acts::Test::TestSourceLink, Acts::BoundIndices, 1>,
+        //                                  Acts::Measurement<Acts::Test::TestSourceLink, Acts::BoundIndices, 2>,
+        //                                  Acts::Measurement<Acts::Test::TestSourceLink, Acts::BoundIndices, 3>,
+        //                                  Acts::Measurement<Acts::Test::TestSourceLink, Acts::BoundIndices, 4>,
+        //                                  Acts::Measurement<Acts::Test::TestSourceLink, Acts::BoundIndices, 5>,
+        //                                  Acts::Measurement<Acts::Test::TestSourceLink, Acts::BoundIndices, 6> >' has no member named 'projector'
+
+
+        // ACTS_INFO("      done calibrating. Projector:\n" << proj);
+
+        // ACTS_INFO("      projector: " << proj.rows() << "×" << proj.cols());
+        // ACTS_INFO("      calibrated: " << calibrated_meas.rows() << "×" << calibrated_meas.cols());
 
         
-
-
-        ACTS_INFO("      measurement parameters:" << measurementParameters.transpose());
-        result.m_measurements_per_surface.push_back(measurementParameters);
-        ACTS_INFO("      measurement dimension:" << kMeasurementSize);
+        // ACTS_INFO("      measurement parameters:" << measurementParameters.transpose()); // these are uncalibrated
+        // result.m_measurements_collector.push_back(measurementParameters);
+        // ACTS_INFO("      measurement dimension:" << kMeasurementSize);
 
         // the Acts::Measurement<SourceLink, BoundIndices, kMeasurementSize>& meas object has a .projector() method
 
@@ -598,10 +683,10 @@ class Chi2Fitter {
       return chi2Result.result.error();
     }
 
-    ACTS_INFO("results.m_measurements_per_surface contains " << chi2Result.m_measurements_per_surface.size() << " results.");
-    if (chi2Result.m_measurements_per_surface.size() > 1){
-      ACTS_INFO("   surf0: " << chi2Result.m_measurements_per_surface[0].transpose());
-      ACTS_INFO("   surf1: " << chi2Result.m_measurements_per_surface[1].transpose());
+    ACTS_INFO("results.m_measurements_collector contains " << chi2Result.m_measurements_collector.size() << " results.");
+    if (chi2Result.m_measurements_collector.size() > 1){
+      ACTS_INFO("   e0: " << chi2Result.m_measurements_collector[0]);
+      ACTS_INFO("   e1: " << chi2Result.m_measurements_collector[1]);
     }
     
 
