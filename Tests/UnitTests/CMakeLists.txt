@@ -20,6 +20,7 @@ macro(add_unittest _name)
       ActsCore
       ActsTestsCommonHelpers
       Boost::unit_test_framework
+      ${Boost_FILESYSTEM_LIBRARY}
       ${unittest_extra_libraries})
   # register as unittest executable
   add_test(NAME ${_name} COMMAND ${_target})
