@@ -124,40 +124,36 @@ struct Chi2FitterResult {
   bool finished = false;
 
 
-
-  // r = M - h(X)
-
-  // (1)
-  // ActsDynamicVector r_measurement_residual; // nx1
-  // ActsDynamicMatrix rcov_measurement_covariance; // sigma_meas
-
   std::vector<Acts::ActsVector<2>> r_measurement_residuals;
   std::vector<Acts::ActsVector<2>> rcov_measurement_covariance;
 
   std::vector<Acts::ActsScalar> m_measurements_collector; // pixel layers add 2 entries, strip layers only one.
   std::vector<Acts::ActsScalar> mcov_measurement_covariance_collector;
-          // (2)
-          // Matrix: derivative of residuals wrt starting parameters
-          // Vector: ∂ χ²  wrt starting track parameters
-          // Matrix: ∂² χ² wrt starting track parameters
+  std::vector<Acts::ActsScalar> r_residual_collector;
 
-          // (3)
-          // Vector: update of starting track parameters
+  Acts::BoundVector d1_deriv_sum_collector = Acts::BoundVector::Zero(); // first derivative of chi2 wrt starting track parameters, 6x1
+  Acts::BoundMatrix d2_deriv_sum_collector = Acts::BoundMatrix::Zero();
 
-          // ————————————————————————————————————————————————————————————
+  std::vector<Acts::BoundVector> H_projector_collector;
 
-          // X is the vector of starting track parameters, 6x1. Also has an
-          // associated 6x6 cov matrix.
-  // ActsVector<6> X_track_parameters;
-  // ActsMatrix<6,6> Xcov_track_parameters_cov;
+  Acts::BoundMatrix previousJacobian = Acts::BoundMatrix::Identity();
 
-  // H is the measurement function, which projects the track parameters to the
-  // measurement. 2nx6 matrix.
-  // ActsDynamicMatrix H_measurement_function;
+      // (3)
+      // Vector: update of starting track parameters
 
-  // M is a 2nx1 matrix,  (why 2nx1 and not nx2?)
-  // m measurements, each is 2dim, with a 2x2 cov matrix
-  ActsDynamicVector M_measurement;
+      // ————————————————————————————————————————————————————————————
+
+      // X is the vector of starting track parameters, 6x1. Also has an
+      // associated 6x6 cov matrix.
+      // ActsVector<6> X_track_parameters;
+      // ActsMatrix<6,6> Xcov_track_parameters_cov;
+
+      // H is the measurement function, which projects the track parameters to
+      // the measurement. 2nx6 matrix. ActsDynamicMatrix H_measurement_function;
+
+          // M is a 2nx1 matrix,  (why 2nx1 and not nx2?)
+          // m measurements, each is 2dim, with a 2x2 cov matrix
+          ActsDynamicVector M_measurement;
   ActsDynamicMatrix Mcov_measurement_cov; // 2mx2?
   // std::vector<Vector3> position;  ?
   
@@ -336,13 +332,21 @@ class Chi2Fitter {
         stepper.covarianceTransport(state.stepping, *surface);
 
         // Bind the transported state to the current surface
-        auto [boundParams, jacobian, pathLength] = stepper.boundState(state.stepping, *surface, false);
-        // EigenStepper.boundState() returns a BoundState,
-        // which is a tuple<Acts::BoundTrackParameters, Acts::BoundMatrix, double>
+        auto [boundParams, jacobian, pathLength] = stepper.boundState(state.stepping, *surface, false); // last parameter: do not transport cov
+        // EigenStepper.boundState() returns a tuple<Acts::BoundTrackParameters, Acts::BoundMatrix, double>
         // Acts:BoundTrackParameters = Acts::SingleBoundTrackParameters<Acts::SinglyCharged>
         //            from Acts/EventData/SingleBoundTrackParameters.hpp
-        // Acts::BoundMatrix = Acts::ActsMatrix<6U, 6U>
-        // Jacobian between measurement A and measurement B
+        // Acts::BoundMatrix is Acts::ActsMatrix<6U, 6U> (Jacobian between measurement A and measurement B)
+        // Jacobian: "the stepwise jacobian towards the bound state (from last bound)" (EigenStepper.hpp:303)
+
+
+
+
+        const Acts::BoundMatrix fullJacobian = result.previousJacobian * jacobian; // TODO: here, `jacobian` is the jacobian between the previous and the current bound state.
+              // For Hi we actually need the full Jacobian from the *starting* track parameters to the current bound state.
+
+        result.previousJacobian = fullJacobian;
+        ACTS_INFO("  jacobian: \n" << jacobian << "\n---------- full:\n" << fullJacobian);
 
 
         // TODO: use `auto` everywhere. for now, concrete types are kept for debugging
@@ -350,205 +354,74 @@ class Chi2Fitter {
         const Acts::BoundVector& predictedParams = std::move(boundParams.parameters());
         // `Acts::BoundVector` is a `Acts::ActsVector<6U>`
 
-        const Acts::BoundSymMatrix predictedCovariance = std::move(*boundParams.covariance()); // TODO: why move?
+        // const Acts::BoundSymMatrix predictedCovariance = std::move(*boundParams.covariance()); // TODO: why move?
 
         
 
         ACTS_INFO("   collecting information");
-        ACTS_INFO("      parameters: " << predictedParams.transpose());
-        // ACTS_INFO("      jacobian: " << jacobian);
+        // ACTS_INFO("      parameters: " << predictedParams.transpose());
+        // ACTS_INFO("      jacobian: " << jacobian.rows() << "x" << jacobian.cols() << "\n" << jacobian);
         // ACTS_INFO("      pathLength: " << pathLength);
 
         Acts::Test::TestSourceLink uncalibrated = sourcelink_it->second;
         // source_link_t is Acts::Test::TestSourceLink
 
-        Acts::ActsVector<2> measurementParameters = uncalibrated.parameters;
-        Acts::ActsSymMatrix<2> measurementCovariance = uncalibrated.covariance;
-        constexpr size_t kMeasurementSize = decltype(measurementParameters)::RowsAtCompileTime;
+        // Acts::ActsVector<2> measurementParameters = uncalibrated.parameters;
+        // Acts::ActsSymMatrix<2> measurementCovariance = uncalibrated.covariance;
 
-        // TestSourceLinkCalibrator
-        // the 
-
-        // TODO: how to store the calibrated measurements? custom trackStateProxy?
-        //
-        // from KF:
-        // We have predicted parameters, so calibrate the uncalibrated input measuerement
-        // Acts::Measurement calibrated;
-        ACTS_INFO("      calibration visit...");
-
-
-
-        
-        
-
-        // const auto& calibratorResult = m_calibrator(uncalibrated, predictedParams);
-        // returns a BoundVariantMeasurement<TestSourceLink>
-
-        // using Meas_t = Acts::Measurement<Acts::Test::TestSourceLink, Acts::BoundIndices, kMeasurementSize>;
-        // const auto& calibrated = std::get<Acts::Measurement<Acts::Test::TestSourceLink, Acts::BoundIndices, 6>>(calibratorResult);
-        // const auto& calibrated = std::get<1>(calibratorResult);
-        // const auto& calibrated = std::get<Acts::Measurement>(calibratorResult);
-        // const Acts::Measurement<Acts::Test::TestSourceLink, Acts::BoundIndices, 6> calibrated
-
-        // static constexpr size_t kSize = 6;
-        // static constexpr size_t kFullSize = 6;
-        // using ProjectionMatrix = ActsMatrix<kSize, kFullSize>;
-
-        using Covariance =  Acts::detail_lt::Types<eBoundSize, true>::CovarianceMap;
-
-        // from MultiTrajectory.hpp
-        // const size_t M = 6; // maximum number of measurement dimensions. TODO: where can I get this from?
-        // constexpr static auto ProjectorFlags = Eigen::RowMajor | Eigen::AutoAlign;
-        // using Projector = Eigen::Matrix<typename Covariance::Scalar, M, eBoundSize, ProjectorFlags>;
-
-
-        // /scratch/rfarkas/phd/Code/acts-chisquare/spack-env-4/.spack-env/view/include/eigen3
-        // /Eigen/src/Core/AssignEvaluator.h: In instantiation of 'void Eigen::internal::call_
-        // assignment_no_alias(Dst&, const Src&, const Func&) [with Dst = Eigen::Matrix<double
-        // , 6, 6, 1>; Src = Eigen::Matrix<double, 1, 6, 1, 1, 6>; Func = Eigen::internal::ass
-        // ign_op<double, double>]':
-        // /scratch/rfarkas/phd/Code/acts-chisquare/spack-env-4/.spack-env/view/include/eigen3
-        // /Eigen/src/Core/PlainObjectBase.h:732:41:   required from 'Derived& Eigen::PlainObj
-        // ectBase<Derived>::_set_noalias(const Eigen::DenseBase<OtherDerived>&) [with OtherDe
-        // rived = Eigen::Matrix<double, 1, 6, 1, 1, 6>; Derived = Eigen::Matrix<double, 6, 6,
-        // 1>]'
-
-        using Measurement = Acts::Measurement<Acts::Test::TestSourceLink, Acts::BoundIndices, 6>;
-        // Measurement::ProjectionMatrix is ActsMatrix<kSize, kFullSize>, where kSize=6 and
-        // static constexpr size_t kFullSize = detail::kParametersSize<indices_t>;
-        // ACTS_INFO("measurement kFullSize = " << Measurement::kFullSize);
-        ACTS_INFO("FullParametersVector size: " << Measurement::FullParametersVector::RowsAtCompileTime);
-
-        // ../Core/include/Acts/TrackFitting/Chi2Fitter.hpp:389:62: error: 'constexpr const size_t Acts::Measurement<Acts::Test::TestSourceLink,
-        // Acts::BoundIndices, 6>::kFullSize' is private within this context
-        // 389 |         ACTS_INFO("measurement kFullSize = " << Measurement::kFullSize);
-
+        ACTS_INFO("      calibration visits...");
         std::visit(
             [&](const auto& calibrated_meas) {
               // calibrated_meas is of type Acts::Measurement<Acts::Test::TestSourceLink, Acts::BoundIndices, kSize>
               // kSize can be 1, 2, 3, 4, 5, 6
 
-              const auto& proj = calibrated_meas.projector();
-              // proj is a Eigen::MatrixBase<Derived>. here, proj can be 1x6 or 2x6
+              const auto& proj = calibrated_meas.projector(); // simple projection matrix H_is, composed of 1 and 0
+              // proj is a Eigen::MatrixBase<Derived>. here, proj can be 1x6 (strip) or 2x6 (pixel)
+
+              
+
+
+              const auto& Hi = proj * fullJacobian; // has dimension 1x6 or 2x6
 
 
               const auto& parameters = calibrated_meas.parameters();
               // ParametersVector = ActsVector
 
-              const auto& covariance = calibrated_meas.covariance();
+              const auto& covariance = calibrated_meas.covariance(); // 2x2 or 1x1. Should be diagonal.
+              const auto& covarianceInverse = covariance.inverse();
               // const CovarianceMatrix& = ActSymMatrix
 
-              ACTS_INFO("         got calibrated measurement + projector");
-              // ACTS_INFO("         rows=" << rows << "  cols=" << cols);
-              // ACTS_INFO("         projector " << decltype(proj));
-              ACTS_INFO("         projector " << proj.rows() << "×" << proj.cols() << "\n" << proj); // 2x6 or 1x6
-              // ⎛1 0 0 0 0 0⎞     or    0 1 0 0 0 0   or    1 0 0 0 0
-              // ⎝0 1 0 0 0 0⎠
-              
-              ACTS_INFO("         (calib)parameters " << parameters.rows() << "×" << parameters.cols() << "   " << parameters.transpose());  // 2x1 or 1x1
-              ACTS_INFO("         (calib)covariance " << covariance.rows() << "×" << covariance.cols()); // 2x2 or 1x1
- 
+              const auto& residuals = calibrated_meas.residuals(predictedParams); // 2x1 or 1x1
+              //  ParametersVector residuals(const FullParametersVector& reference)
+
+              const auto& deriv1 = -2 * Hi.transpose() * covarianceInverse * residuals; // 6x1
+              const auto& deriv2 = 2*Hi.transpose() * covarianceInverse * Hi; // 6x6
+
+              result.d1_deriv_sum_collector += deriv1;
+              result.d2_deriv_sum_collector += deriv2;
+
               result.m_measurements_collector.push_back(parameters(0));
               result.mcov_measurement_covariance_collector.push_back(covariance(0,0));
 
+              result.r_residual_collector.push_back(residuals(0));
+              // predictedParams
+              // ACTS_INFO("         calculating residuals. Predicted Params:\n" <<predictedParams << "\n----\n" << parameters);
+
+              ACTS_INFO("         residuals: " << residuals.transpose());
+              ACTS_INFO("         His:  " << proj.rows() << "x" << proj.cols() << "\n" << proj);
+              ACTS_INFO("         Hi:   " << Hi.rows() << "x" << Hi.cols() << "\n" << Hi);
+              ACTS_INFO("         ∂:  " << deriv1.rows() << "x" << deriv1.cols() << "\n" << deriv1.transpose());
+              ACTS_INFO("         ∂²: " << deriv2.rows() << "x" << deriv2.cols() << "\n" << deriv2);
+              ACTS_INFO("         ∂² total:\n" << result.d2_deriv_sum_collector);
+
               if (parameters.rows() == 2){
                 result.m_measurements_collector.push_back(parameters(1));
+                // This however depends on the matrix's storage order. All Eigen matrices default to column-major storage order, but this can be changed to row-major, see Storage orders.
+                result.r_residual_collector.push_back(residuals(1));
                 result.mcov_measurement_covariance_collector.push_back(covariance(0, 0));
-
-                ACTS_INFO("          parameters: " << parameters.transpose());
-                ACTS_INFO("          parameters: " << parameters(0, 0));
-                ACTS_INFO("          parameters: " << parameters(1, 0));
-                ACTS_INFO("          parameters: " << parameters(0));
-                ACTS_INFO("          parameters: " << parameters(1));
               }
-
-              // residual = parameters - proj * ???
-
-            /*
-              if (parameters.rows() == 1){
-                
-              } else if (parameters.rows() == 2){
-
-              }
-            */
-
-              // const ParametersVector residual = parameters - H * predicted // ODER SOWAS…
-              
-              // XX ACTS_INFO("         fullProjector " << fullProjector::RowsAtCompilationTime);
-              // -> error: 'fullProjector' is not a class, namespace, or enumeration
-              
-              // ACTS_INFO("         fullProjector " << fullProjector.rows() << " x " << fullProjector.cols());
-              // ACTS_INFO("         projector 3 " << proj3);
-              // ACTS_INFO("         matrix rows: " << decltype(proj)::RowsAtCompileTime);
-              // ACTS_INFO("         matrix cols: " << decltype(proj)::ColsAtCompileTime);
-              // trackStateProxy.setCalibrated(calibrated);
             },
             m_calibrator(uncalibrated, predictedParams));
-          
-        // const auto& calibrated_meas_variant = m_calibrator(uncalibrated, predictedParams);
-        // ^ variant< Measurement<1>, Measurement<2>, … >
-
-        // const auto& proj = calibrated_meas.projector();
-        // error: 'const class std::variant<Acts::Measurement<Acts::Test::TestSourceLink, Acts::BoundIndices, 1>,
-        //                                  Acts::Measurement<Acts::Test::TestSourceLink, Acts::BoundIndices, 2>,
-        //                                  Acts::Measurement<Acts::Test::TestSourceLink, Acts::BoundIndices, 3>,
-        //                                  Acts::Measurement<Acts::Test::TestSourceLink, Acts::BoundIndices, 4>,
-        //                                  Acts::Measurement<Acts::Test::TestSourceLink, Acts::BoundIndices, 5>,
-        //                                  Acts::Measurement<Acts::Test::TestSourceLink, Acts::BoundIndices, 6> >' has no member named 'projector'
-
-
-        // ACTS_INFO("      done calibrating. Projector:\n" << proj);
-
-        // ACTS_INFO("      projector: " << proj.rows() << "×" << proj.cols());
-        // ACTS_INFO("      calibrated: " << calibrated_meas.rows() << "×" << calibrated_meas.cols());
-
-        
-        // ACTS_INFO("      measurement parameters:" << measurementParameters.transpose()); // these are uncalibrated
-        // result.m_measurements_collector.push_back(measurementParameters);
-        // ACTS_INFO("      measurement dimension:" << kMeasurementSize);
-
-        // the Acts::Measurement<SourceLink, BoundIndices, kMeasurementSize>& meas object has a .projector() method
-
-        // from GainMatrixUpdater.hpp:78
-        //
-        // const auto H =
-        //     trackState.projector()
-        //         .template topLeftCorner<kMeasurementSize, eBoundSize>()
-        //         .eval();
-        // 
-        // ACTS_INFO("      Measurement projector H:\n" << H);
-        // 
-        // const auto K =
-        //     (predictedCovariance * H.transpose() *
-        //      (H * predictedCovariance * H.transpose() + calibratedCovariance)
-        //          .inverse())
-        //         .eval();
-        
-        // GainMatrixUpdater.hpp :118
-        //
-        // ParametersVector residual = calibrated - H * filtered;
-        // [...]
-        // trackState.chi2() =
-        //     (residual.transpose() *
-        //      ((CovarianceMatrix::Identity() - H * K) * calibratedCovariance)
-        //          .inverse() *
-        //      residual)
-        //         .value();
-
-
-
-
-// 
-        // auto residuals = state.calibrated() - state.projector() *  state.predicted();
-
-        // TODO: collect measurement information
-        //   - residual vector
-        //  (r^2_meas, sigma^2_meas)
-        
-        // TODO: calculate residual + chisq, and derivatives of this measurement
-        // TODO: calculate update of track parameters
-
-
 
         // -->>> in the Kalman Fitter, we run the KalmanUpdate m_updater() here <<<--
       }
@@ -663,6 +536,8 @@ class Chi2Fitter {
     }
 
 
+
+    ACTS_INFO("calculating chi square and parameter delta...");
     // fitter retreives the object
     // runs minimizer (ideally we can make it pluggable)
     // if it converges, fine. Else, the fitter needs to re-invoke the proapgator from the new start and go ahead.
@@ -683,16 +558,67 @@ class Chi2Fitter {
       return chi2Result.result.error();
     }
 
-    ACTS_INFO("results.m_measurements_collector contains " << chi2Result.m_measurements_collector.size() << " results.");
-    if (chi2Result.m_measurements_collector.size() > 1){
-      ACTS_INFO("   e0: " << chi2Result.m_measurements_collector[0]);
-      ACTS_INFO("   e1: " << chi2Result.m_measurements_collector[1]);
+    const int n = chi2Result.m_measurements_collector.size(); // number of measurements
+
+    // ACTS_INFO("results.m_measurements_collector contains " << chi2Result.m_measurements_collector.size() << " results.");
+    // if (chi2Result.m_measurements_collector.size() > 1){
+    //   ACTS_INFO("   e0: " << chi2Result.m_measurements_collector[0]);
+    //   ACTS_INFO("   e1: " << chi2Result.m_measurements_collector[1]);
+    // }
+
+    // ACTS_INFO("   residuals: " << chi2Result.r_residual_collector); XXX std::vector<double>
+    // error: no match for 'operator<<' (operand types are 'std::ostringstream' and 'std::vector<double>')
+
+    // using ActsVector = Eigen::Matrix<ActsScalar, kSize, 1>;
+
+    // ActsDynamicVector residuals;
+    // residuals.resize(chi2Result.r_residual_collector.size());
+    // residuals = chi2Result.r_residual_collector.data();
+
+    ActsDynamicVector residuals = Eigen::Map<ActsDynamicVector>(chi2Result.r_residual_collector.data(), chi2Result.r_residual_collector.size());
+    // TODO: is this safe? from Stackoverflow: "dangerous! Because the Eigen object will NOT create its own memory. It will operate on the memory provided by
+    // "data". In other words, working with the Eigen object when the "data" object is out of scope will result in a segmentation fault (or memory access violation)."
+
+    ACTS_INFO("   residuals Eigen vector: " << residuals.rows() << "x" << residuals.cols() << "\n" << residuals.transpose());
+
+    ActsDynamicVector variance = Eigen::Map<ActsDynamicVector>(
+        chi2Result.mcov_measurement_covariance_collector.data(),
+        chi2Result.mcov_measurement_covariance_collector.size());
+    // Eigen::DiagonalMatrix<ActsScalar, Eigen::Dynamic> covariance = variance.asDiagonal(); // TODO: operator<< missing for Eigen::DiagonalMatrix<double, -1>
+    ActsDynamicMatrix covariance = variance.asDiagonal();
+    ACTS_INFO("   covariance size: " << covariance.rows() << "x" << covariance.cols() << "\n" << covariance);
+
+    // build Matrix from projector list
+    ActsDynamicMatrix H = ActsDynamicMatrix::Zero(n, 6); // TODO: as we overwrite the values, use another constructor?
+    for(int i = 0; i < n; ++i) {
+      ACTS_INFO("       H projector i="<<i<<" : " << chi2Result.H_projector_collector[i].transpose());
+      H.row(i) = chi2Result.H_projector_collector[i];
     }
+
     
 
-    // Return the converted track
-    return chi2Result;
+    
+    ActsDynamicMatrix covarianceInverse = covariance.inverse(); // TODO: this may be inefficient. 
+    // Eigen doc: "Inverse computations are often advantageously replaced by solve() operations"
 
+
+    ActsScalar chisquare = residuals.transpose() * covarianceInverse * residuals;
+    ACTS_INFO("   chi^2 = " << chisquare);  // chi^2 = 17.9695
+
+    // const ActsVector<6> deriv1 = -2 * H.transpose() * covarianceInverse * residuals;
+    // const ActsMatrix<6,6> deriv2 = 2 * H.transpose() * covarianceInverse * H;
+
+    ACTS_INFO("   ∂  = " << chi2Result.d1_deriv_sum_collector.transpose());
+    ACTS_INFO("   ∂² = \n" << chi2Result.d2_deriv_sum_collector); // 6x6
+    // ACTS_INFO("   ∂² inv = \n" << chi2Result.d2_deriv_sum_collector.inverse());
+
+    Acts::BoundVector delta_start_parameters = chi2Result.d2_deriv_sum_collector.colPivHouseholderQr().solve(chi2Result.d1_deriv_sum_collector); 
+    // Acts::BoundVector delta_start_parameters = chi2Result.d2_deriv_sum_collector.inverse() * chi2Result.d1_deriv_sum_collector;
+
+    ACTS_INFO("    ∆parameters = \n" << delta_start_parameters.transpose());
+
+        // Return the converted track
+        return chi2Result;
   }
 };
 
