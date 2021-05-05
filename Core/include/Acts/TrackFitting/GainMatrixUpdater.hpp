@@ -80,7 +80,6 @@ class GainMatrixUpdater {
                   .template topLeftCorner<kMeasurementSize, eBoundSize>()
                   .eval();
 
-          ACTS_VERBOSE("Measurement projector H:\n" << H);
 
           const auto K =
               (predictedCovariance * H.transpose() *
