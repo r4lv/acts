@@ -15,6 +15,7 @@ target_link_libraries(
     ActsExamplesCommon
     ActsExamplesDigitization
     ActsExamplesTrackFitting
+    ActsExamplesTrackFittingChi2
     ActsExamplesTrackFinding
     ActsExamplesMagneticField
     ActsExamplesTruthTracking

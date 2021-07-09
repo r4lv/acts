@@ -135,9 +135,9 @@ constexpr size_t nMeasurements = 6u;
 
 // detector resolutions
 const MeasurementResolution resPixel = {MeasurementType::eLoc01,
-                                        {25_um, 50_um}};
-const MeasurementResolution resStrip0 = {MeasurementType::eLoc0, {100_um}};
-const MeasurementResolution resStrip1 = {MeasurementType::eLoc1, {150_um}};
+                                        {1_um, 1_um}};
+const MeasurementResolution resStrip0 = {MeasurementType::eLoc0, {1_um}};
+const MeasurementResolution resStrip1 = {MeasurementType::eLoc1, {1_um}};
 const MeasurementResolutionMap resolutions = {
     {GeometryIdentifier().setVolume(2), resPixel},
     {GeometryIdentifier().setVolume(3).setLayer(2), resStrip0},

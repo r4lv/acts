@@ -41,7 +41,8 @@ int processGeometry(int argc, char* argv[],
   ActsExamples::Options::addOutputOptions(desc,
                                           ActsExamples::OutputFormat::Root |
                                               ActsExamples::OutputFormat::Json |
-                                              ActsExamples::OutputFormat::Csv);
+                                              ActsExamples::OutputFormat::Csv |
+                                              ActsExamples::OutputFormat::Obj);
 
   // Add specific options for this geometry
   detector.addOptions(desc);

@@ -10,7 +10,6 @@
 
 #include "Acts/Geometry/TrackingGeometry.hpp"
 #include "Acts/TrackFitting/KalmanFitter.hpp"
-#include "Acts/TrackFitting/Chi2Fitter.hpp" // RR
 #include "ActsExamples/EventData/IndexSourceLink.hpp"
 #include "ActsExamples/EventData/Measurement.hpp"
 #include "ActsExamples/EventData/Track.hpp"
@@ -100,7 +99,7 @@ class TrackFittingAlgorithm final : public BareAlgorithm {
   Config m_cfg;
 };
 
-inline ActsExamples::TrackFittingAlgorithm::TrackFitterResult
+inline ActsExamples::TrackFittingAlgorithm::TrackFitterResult // <- RR rename to KFTrackFitterResult?
 ActsExamples::TrackFittingAlgorithm::fitTrack(
     const std::vector<ActsExamples::IndexSourceLink>& sourceLinks,
     const ActsExamples::TrackParameters& initialParameters,

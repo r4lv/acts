@@ -43,7 +43,7 @@ void ActsExamples::Options::addDigitizationOptions(Description& desc) {
   //   --digi-smear-parameters=12.5 # loc1 gaussian width
   //
   auto opt = desc.add_options();
-  opt("digi-config-file", value<std::string>(),
+  opt("digi-config-file", value<std::string>()->default_value(""),
       "Configuration (.json) file for digitization description, overwrites "
       "smearing options input on command line.");
   opt("digi-geometric-3d", bool_switch(),

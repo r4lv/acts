@@ -14,10 +14,15 @@ namespace ActsExamples {
 class IBaseDetector;
 }
 
-/// Main function for running chi square fitting with a specific detector.
+/// The options for running CKF reco
+///
+/// @param desc The options description to add options to
+void addRecChi2Options(ActsExamples::Options::Description& desc);
+
+/// Main function for running CKF reco with a specific detector.
 ///
 /// @param argc number of command line arguments
 /// @param argv command line arguments
 /// @param detector is the detector to be used
 int runRecChi2Tracks(int argc, char* argv[],
-                      std::shared_ptr<ActsExamples::IBaseDetector> detector);
+                    std::shared_ptr<ActsExamples::IBaseDetector> detector);

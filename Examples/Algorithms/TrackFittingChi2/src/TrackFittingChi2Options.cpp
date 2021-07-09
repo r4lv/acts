@@ -10,8 +10,11 @@
 
 using namespace boost::program_options;
 
-void ActsExamples::Options::addFittingOptions(
+void ActsExamples::Options::addFittingChi2Options(
     boost::program_options::options_description& opt) {
   opt.add_options()("directed-navigation", value<bool>()->default_value(false),
                     "Fit tracks with DirectNavigator");
+  opt.add_options()(
+      "chi2-updates", value<unsigned int>()->default_value(1),
+      "number of update steps for the Chi2Fitter");
 }

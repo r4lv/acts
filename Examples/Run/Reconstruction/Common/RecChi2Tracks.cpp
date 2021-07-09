@@ -6,6 +6,8 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
+// -->> based on RecTruthTracks.cpp <<--
+
 #include "ActsExamples/Detector/IBaseDetector.hpp"
 #include "ActsExamples/Digitization/HitSmearing.hpp"
 #include "ActsExamples/Framework/Sequencer.hpp"
@@ -15,14 +17,16 @@
 #include "ActsExamples/Io/Csv/CsvParticleReader.hpp"
 #include "ActsExamples/Io/Csv/CsvSimHitReader.hpp"
 #include "ActsExamples/Io/Performance/TrackFinderPerformanceWriter.hpp"
-#include "ActsExamples/Io/Performance/TrackFitterPerformanceWriter.hpp"
+#include "ActsExamples/Io/Performance/TrackFitterPerformanceWriter.hpp" // TODO: optimize for chi2?
 #include "ActsExamples/Io/Root/RootTrajectoryParametersWriter.hpp"
 #include "ActsExamples/Io/Root/RootTrajectoryStatesWriter.hpp"
 #include "ActsExamples/Options/CommonOptions.hpp"
 #include "ActsExamples/Plugins/BField/BFieldOptions.hpp"
 #include "ActsExamples/TrackFitting/SurfaceSortingAlgorithm.hpp"
-#include "ActsExamples/TrackFitting/TrackFittingAlgorithm.hpp"
-#include "ActsExamples/TrackFitting/TrackFittingOptions.hpp"
+// #include "ActsExamples/TrackFitting/TrackFittingAlgorithm.hpp"
+// #include "ActsExamples/TrackFitting/TrackFittingOptions.hpp" // TODO: new ch2 fitting options?
+#include "ActsExamples/TrackFittingChi2/TrackFittingChi2Algorithm.hpp"
+#include "ActsExamples/TrackFittingChi2/TrackFittingChi2Options.hpp"
 #include "ActsExamples/TruthTracking/ParticleSmearing.hpp"
 #include "ActsExamples/TruthTracking/TruthSeedSelector.hpp"
 #include "ActsExamples/TruthTracking/TruthTrackFinder.hpp"
@@ -49,7 +53,7 @@ int runRecChi2Tracks(int argc, char* argv[],
   Options::addOutputOptions(desc, OutputFormat::DirectoryOnly);
   detector->addOptions(desc);
   Options::addBFieldOptions(desc);
-  Options::addFittingOptions(desc);
+  Options::addFittingChi2Options(desc); // this also adds --chi2-updates
 
   auto vm = Options::parse(desc, argc, argv);
   if (vm.empty()) {
@@ -64,6 +68,7 @@ int runRecChi2Tracks(int argc, char* argv[],
   auto rnd = std::make_shared<const ActsExamples::RandomNumbers>(
       Options::readRandomNumbersConfig(vm));
   auto dirNav = vm["directed-navigation"].as<bool>();
+  auto nUpdates = vm["chi2-updates"].as<unsigned int>();
 
   // Setup detector geometry
   auto geometry = Geometry::build(vm, *detector);
@@ -128,23 +133,28 @@ int runRecChi2Tracks(int argc, char* argv[],
   }
 
   // setup the fitter
-  TrackFittingAlgorithm::Config fitter;
+  // TODO: wouldn't it be better to pass some chi2 options directly here,
+  // instead of constructing the Acts::Chi2FitterOptions object in the
+  // TrackFittingAlgorithm.cpp?
+  TrackFittingChi2Algorithm::Config fitter;
   fitter.inputMeasurements = hitSmearingCfg.outputMeasurements;
   fitter.inputSourceLinks = hitSmearingCfg.outputSourceLinks;
   fitter.inputProtoTracks = trackFinderCfg.outputProtoTracks;
-  if (dirNav) {
-    fitter.inputProtoTracks = sorterCfg.outputProtoTracks;
-  }
+
   fitter.inputInitialTrackParameters =
       particleSmearingCfg.outputTrackParameters;
   fitter.outputTrajectories = "trajectories";
-  fitter.directNavigation = dirNav;
+  // fitter.directNavigation = false; // TODO: the --direct-navigation flag is ignored for now.
+  // fitter.useChi2Fitter = true; // TODO: this is hard-coded. Better to have one single RecTruthTrack with a switch instead?
   fitter.trackingGeometry = trackingGeometry;
-  fitter.dFit = TrackFittingAlgorithm::makeTrackFitterFunction(magneticField);
-  fitter.fit = TrackFittingAlgorithm::makeTrackFitterFunction(trackingGeometry,
-                                                              magneticField);
+  fitter.nUpdates = nUpdates; // passed from CLI trough TrackFittingChi2Options.cpp
+  // fitter.dFit = TrackFittingAlgorithm::makeTrackFitterFunction(magneticField);
+  // fitter.fit = TrackFittingAlgorithm::makeTrackFitterFunction(trackingGeometry, magneticField);
+  fitter.fit = TrackFittingChi2Algorithm::makeTrackFitterChi2Function(
+      trackingGeometry, magneticField);
+  // ^ returns a Chi2TrackFitterFunction
   sequencer.addAlgorithm(
-      std::make_shared<TrackFittingAlgorithm>(fitter, logLevel));
+      std::make_shared<TrackFittingChi2Algorithm>(fitter, logLevel));
 
   // write track states from fitting
   RootTrajectoryStatesWriter::Config trackStatesWriter;

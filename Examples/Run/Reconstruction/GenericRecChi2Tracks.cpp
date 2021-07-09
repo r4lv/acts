@@ -6,15 +6,10 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-#pragma once
+#include "ActsExamples/GenericDetector/GenericDetector.hpp"
 
-#include <boost/program_options.hpp>
+#include "RecChi2Tracks.hpp"
 
-namespace ActsExamples {
-namespace Options {
-
-/// Add common fitted related options
-void addFittingChi2Options(boost::program_options::options_description& opt);
-
-}  // namespace Options
-}  // namespace ActsExamples
+int main(int argc, char* argv[]) {
+  return runRecChi2Tracks(argc, argv, std::make_shared<GenericDetector>());
+}

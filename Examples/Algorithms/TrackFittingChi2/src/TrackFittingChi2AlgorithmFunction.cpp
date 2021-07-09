@@ -24,13 +24,14 @@
 
 #include "Acts/Utilities/Helpers.hpp"
 #include "ActsExamples/Plugins/BField/ScalableBField.hpp"
-#include "ActsExamples/TrackFitting/TrackFittingAlgorithm.hpp"
+// #include "ActsExamples/TrackFitting/TrackFittingAlgorithm.hpp"
+#include "ActsExamples/TrackFittingChi2/TrackFittingChi2Algorithm.hpp"
 
     namespace {
 
 template <typename track_fitter_t>
 struct TrackFitterChi2FunctionImpl {
-  track_fitter_t trackFitter;
+  track_fitter_t trackFitterChi2;
 
   TrackFitterChi2FunctionImpl(track_fitter_t&& f)
       : trackFitterChi2(std::move(f)) {}
@@ -40,7 +41,7 @@ struct TrackFitterChi2FunctionImpl {
       const ActsExamples::TrackParameters& initialParameters,
       const ActsExamples::TrackFittingChi2Algorithm::TrackFitterChi2Options&
           options) const {
-    return trackChi2Fitter.fit(sourceLinks, initialParameters, options);
+    return trackFitterChi2.fit(sourceLinks, initialParameters, options);
   };
 };
 

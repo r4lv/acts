@@ -45,7 +45,7 @@ namespace Acts {
 /// @tparam calibrator_t Source link type, should be semiregular.
 /// @tparam outlier_finder_t Outlier finder type, shoule be semiregular.
 template <typename calibrator_t, typename outlier_finder_t>
-struct KalmanFitterOptions {
+struct Chi22FitterOptions {
   using Calibrator = calibrator_t;
   using OutlierFinder = outlier_finder_t;
 
@@ -63,7 +63,7 @@ struct KalmanFitterOptions {
   /// @param eLoss Whether to include energy loss
   /// @param rFiltering Whether to run filtering in reversed direction as
   /// smoothing
-  KalmanFitterOptions(const GeometryContext& gctx,
+  Chi22FitterOptions(const GeometryContext& gctx,
                       const MagneticFieldContext& mctx,
                       std::reference_wrapper<const CalibrationContext> cctx,
                       Calibrator calibrator_, OutlierFinder outlierFinder_,
@@ -84,7 +84,7 @@ struct KalmanFitterOptions {
         reversedFiltering(rFiltering),
         logger(logger_) {}
   /// Contexts are required and the options must not be default-constructible.
-  KalmanFitterOptions() = delete;
+  Chi22FitterOptions() = delete;
 
   /// Context object for the geometry
   std::reference_wrapper<const GeometryContext> geoContext;
@@ -119,7 +119,7 @@ struct KalmanFitterOptions {
 };
 
 template <typename source_link_t>
-struct KalmanFitterResult {
+struct Chi22FitterResult {
   // Fitted states that the actor has handled.
   MultiTrajectory<source_link_t> fittedStates;
 
@@ -182,16 +182,16 @@ struct KalmanFitterResult {
 /// The void components are provided mainly for unit testing.
 template <typename propagator_t, typename updater_t = VoidKalmanUpdater,
           typename smoother_t = VoidKalmanSmoother>
-class KalmanFitter {
+class Chi22Fitter {
   /// The navigator type
-  using KalmanNavigator = typename propagator_t::Navigator;
+  using Chi22Navigator = typename propagator_t::Navigator;
 
   /// The navigator has DirectNavigator type or not
   static constexpr bool isDirectNavigator =
-      std::is_same<KalmanNavigator, DirectNavigator>::value;
+      std::is_same<Chi22Navigator, DirectNavigator>::value;
 
  public:
-  KalmanFitter(propagator_t pPropagator)
+  Chi22Fitter(propagator_t pPropagator)
       : m_propagator(std::move(pPropagator)) {}
 
  private:
@@ -212,7 +212,7 @@ class KalmanFitter {
   class Actor {
    public:
     /// Broadcast the result_type
-    using result_type = KalmanFitterResult<source_link_t>;
+    using result_type = Chi22FitterResult<source_link_t>;
 
     /// The target surface
     const Surface* targetSurface = nullptr;
@@ -275,7 +275,7 @@ class KalmanFitter {
                                  state.navigation.navSurfaces.end()) {
           // So the navigator target call will target layers
           state.navigation.navigationStage =
-              KalmanNavigator::Stage::layerTarget;
+              Chi22Navigator::Stage::layerTarget;
           // We only do this after the backward-propagation
           // starting layer has been processed
           result.reset = false;
@@ -1020,9 +1020,8 @@ class KalmanFitter {
             typename parameters_t = BoundTrackParameters>
   auto fit(const std::vector<source_link_t>& sourcelinks,
            const start_parameters_t& sParameters,
-           const KalmanFitterOptions<calibrator_t, outlier_finder_t>& kfOptions)
-      const -> std::enable_if_t<!isDirectNavigator,
-                                Result<KalmanFitterResult<source_link_t>>> {
+           const Chi22FitterOptions<calibrator_t, outlier_finder_t>& kfOptions)
+{
     const auto& logger = kfOptions.logger;
 
     static_assert(SourceLinkConcept<source_link_t>,
@@ -1037,34 +1036,34 @@ class KalmanFitter {
     }
 
     // Create the ActionList and AbortList
-    using KalmanAborter =
+    using Chi22Aborter =
         Aborter<source_link_t, parameters_t, calibrator_t, outlier_finder_t>;
-    using KalmanActor =
+    using Chi22Actor =
         Actor<source_link_t, parameters_t, calibrator_t, outlier_finder_t>;
-    using KalmanResult = typename KalmanActor::result_type;
-    using Actors = ActionList<KalmanActor>;
-    using Aborters = AbortList<KalmanAborter>;
+    using Chi22Result = typename Chi22Actor::result_type;
+    using Actors = ActionList<Chi22Actor>;
+    using Aborters = AbortList<Chi22Aborter>;
 
     // Create relevant options for the propagation options
-    PropagatorOptions<Actors, Aborters> kalmanOptions(
+    PropagatorOptions<Actors, Aborters> chi22Options(
         kfOptions.geoContext, kfOptions.magFieldContext, logger);
 
     // Set the trivial propagator options
-    kalmanOptions.setPlainOptions(kfOptions.propagatorPlainOptions);
+    chi22Options.setPlainOptions(kfOptions.propagatorPlainOptions);
 
     // Catch the actor and set the measurements
-    auto& kalmanActor = kalmanOptions.actionList.template get<KalmanActor>();
-    kalmanActor.inputMeasurements = std::move(inputMeasurements);
-    kalmanActor.targetSurface = kfOptions.referenceSurface;
-    kalmanActor.multipleScattering = kfOptions.multipleScattering;
-    kalmanActor.energyLoss = kfOptions.energyLoss;
-    kalmanActor.reversedFiltering = kfOptions.reversedFiltering;
-    kalmanActor.m_calibrator = kfOptions.calibrator;
-    kalmanActor.m_outlierFinder = kfOptions.outlierFinder;
+    auto& chi22Actor = chi22Options.actionList.template get<Chi22Actor>();
+    chi22Actor.inputMeasurements = std::move(inputMeasurements);
+    chi22Actor.targetSurface = kfOptions.referenceSurface;
+    chi22Actor.multipleScattering = kfOptions.multipleScattering;
+    chi22Actor.energyLoss = kfOptions.energyLoss;
+    chi22Actor.reversedFiltering = kfOptions.reversedFiltering;
+    chi22Actor.m_calibrator = kfOptions.calibrator;
+    chi22Actor.m_outlierFinder = kfOptions.outlierFinder;
 
     // Run the fitter
     ACTS_INFO("KF fit() starting propagator...");
-    auto result = m_propagator.template propagate(sParameters, kalmanOptions);
+    auto result = m_propagator.template propagate(sParameters, chi22Options);
     ACTS_INFO("KF fit() propagator done.");
 
     if (!result.ok()) {
@@ -1075,122 +1074,21 @@ class KalmanFitter {
     const auto& propRes = *result;
 
     /// Get the result of the fit
-    auto kalmanResult = propRes.template get<KalmanResult>();
+    auto chi22Result = propRes.template get<Chi22Result>();
 
     /// It could happen that the fit ends in zero processed states.
     /// The result gets meaningless so such case is regarded as fit failure.
-    if (kalmanResult.result.ok() and not kalmanResult.processedStates) {
-      kalmanResult.result = Result<void>(KalmanFitterError::NoMeasurementFound);
+    if (chi22Result.result.ok() and not chi22Result.processedStates) {
+      chi22Result.result = Result<void>(KalmanFitterError::NoMeasurementFound);
     }
 
-    if (!kalmanResult.result.ok()) {
-      ACTS_ERROR("KalmanFilter failed: " << kalmanResult.result.error());
-      return kalmanResult.result.error();
-    }
-
-    // Return the converted Track
-    return kalmanResult;
-  }
-
-  /// Fit implementation of the foward filter, calls the
-  /// the filter and smoother/reversed filter
-  ///
-  /// @tparam source_link_t Type of the source link
-  /// @tparam start_parameters_t Type of the initial parameters
-  /// @tparam calibrator_t Type of the source link calibrator
-  /// @tparam outlier_finder_t Type of the outlier finder
-  /// @tparam parameters_t Type of parameters used for local parameters
-  ///
-  /// @param sourcelinks The fittable uncalibrated measurements
-  /// @param sParameters The initial track parameters
-  /// @param kfOptions KalmanOptions steering the fit
-  /// @param sSequence surface sequence used to initialize a DirectNavigator
-  /// @note The input measurements are given in the form of @c SourceLinks.
-  /// It's
-  /// @c calibrator_t's job to turn them into calibrated measurements used in
-  /// the fit.
-  ///
-  /// @return the output as an output track
-  template <typename source_link_t, typename start_parameters_t,
-            typename calibrator_t, typename outlier_finder_t,
-            typename parameters_t = BoundTrackParameters>
-  auto fit(const std::vector<source_link_t>& sourcelinks,
-           const start_parameters_t& sParameters,
-           const KalmanFitterOptions<calibrator_t, outlier_finder_t>& kfOptions,
-           const std::vector<const Surface*>& sSequence) const
-      -> std::enable_if_t<isDirectNavigator,
-                          Result<KalmanFitterResult<source_link_t>>> {
-    const auto& logger = kfOptions.logger;
-    static_assert(SourceLinkConcept<source_link_t>,
-                  "Source link does not fulfill SourceLinkConcept");
-
-    // To be able to find measurements later, we put them into a map
-    // We need to copy input SourceLinks anyways, so the map can own them.
-    ACTS_VERBOSE("Preparing " << sourcelinks.size() << " input measurements");
-    std::map<GeometryIdentifier, source_link_t> inputMeasurements;
-    for (const auto& sl : sourcelinks) {
-      inputMeasurements.emplace(sl.geometryId(), sl);
-    }
-
-    // Create the ActionList and AbortList
-    using KalmanAborter =
-        Aborter<source_link_t, parameters_t, calibrator_t, outlier_finder_t>;
-    using KalmanActor =
-        Actor<source_link_t, parameters_t, calibrator_t, outlier_finder_t>;
-    using KalmanResult = typename KalmanActor::result_type;
-    using Actors = ActionList<DirectNavigator::Initializer, KalmanActor>;
-    using Aborters = AbortList<KalmanAborter>;
-
-    // Create relevant options for the propagation options
-    PropagatorOptions<Actors, Aborters> kalmanOptions(
-        kfOptions.geoContext, kfOptions.magFieldContext, logger);
-
-    // Set the trivial propagator options
-    kalmanOptions.setPlainOptions(kfOptions.propagatorPlainOptions);
-
-    // Catch the actor and set the measurements
-    auto& kalmanActor = kalmanOptions.actionList.template get<KalmanActor>();
-    kalmanActor.inputMeasurements = std::move(inputMeasurements);
-    kalmanActor.targetSurface = kfOptions.referenceSurface;
-    kalmanActor.multipleScattering = kfOptions.multipleScattering;
-    kalmanActor.energyLoss = kfOptions.energyLoss;
-    kalmanActor.reversedFiltering = kfOptions.reversedFiltering;
-    kalmanActor.m_calibrator = kfOptions.calibrator;
-    // Set config for outlier finder
-    kalmanActor.m_outlierFinder = kfOptions.outlierFinder;
-
-    // Set the surface sequence
-    auto& dInitializer =
-        kalmanOptions.actionList.template get<DirectNavigator::Initializer>();
-    dInitializer.navSurfaces = sSequence;
-
-    // Run the fitter
-    auto result = m_propagator.template propagate(sParameters, kalmanOptions);
-
-    if (!result.ok()) {
-      ACTS_ERROR("Propapation failed: " << result.error());
-      return result.error();
-    }
-
-    const auto& propRes = *result;
-
-    /// Get the result of the fit
-    auto kalmanResult = propRes.template get<KalmanResult>();
-
-    /// It could happen that the fit ends in zero processed states.
-    /// The result gets meaningless so such case is regarded as fit failure.
-    if (kalmanResult.result.ok() and not kalmanResult.processedStates) {
-      kalmanResult.result = Result<void>(KalmanFitterError::NoMeasurementFound);
-    }
-
-    if (!kalmanResult.result.ok()) {
-      ACTS_ERROR("KalmanFilter failed: " << kalmanResult.result.error());
-      return kalmanResult.result.error();
+    if (!chi22Result.result.ok()) {
+      ACTS_ERROR("KalmanFilter failed: " << chi22Result.result.error());
+      return chi22Result.result.error();
     }
 
     // Return the converted Track
-    return kalmanResult;
+    return chi22Result;
   }
-};
-
+ 
 }  // namespace Acts

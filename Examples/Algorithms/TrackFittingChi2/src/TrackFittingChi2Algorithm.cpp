@@ -65,22 +65,16 @@ ActsExamples::ProcessCode ActsExamples::TrackFittingChi2Algorithm::execute(
   auto pSurface = Acts::Surface::makeShared<Acts::PerigeeSurface>(
       Acts::Vector3{0., 0., 0.});
 
-  // Set the KalmanFitter options
-//   Acts::KalmanFitterOptions<MeasurementCalibrator, Acts::VoidOutlierFinder>
-//       chi2Options(ctx.geoContext, ctx.magFieldContext, ctx.calibContext,
-//                 MeasurementCalibrator(measurements), Acts::VoidOutlierFinder(),
-//                 Acts::LoggerWrapper{logger()}, Acts::PropagatorPlainOptions(),
-//                 &(*pSurface));
-
    Acts::Chi2FitterOptions<MeasurementCalibrator, Acts::VoidOutlierFinder>
       chi2Options(ctx.geoContext, ctx.magFieldContext, ctx.calibContext,
                 MeasurementCalibrator(measurements), Acts::VoidOutlierFinder(),
                 Acts::LoggerWrapper{logger()}, Acts::PropagatorPlainOptions(),
-                &(*pSurface)); // mScattering=false, eLoss=false
+                &(*pSurface), false, false, m_cfg.nUpdates, true); // mScattering=false, eLoss=false
+
+    ACTS_INFO("RRRRR construct object with nUpdates=" << m_cfg.nUpdates);
 
        // Perform the fit for each input track
-       std::vector<IndexSourceLink>
-           trackSourceLinks;
+   std::vector<IndexSourceLink> trackSourceLinks;
    std::vector<const Acts::Surface*> surfSequence;
    for (std::size_t itrack = 0; itrack < protoTracks.size(); ++itrack) {
      // The list of hits and the initial start parameters
@@ -114,7 +108,8 @@ ActsExamples::ProcessCode ActsExamples::TrackFittingChi2Algorithm::execute(
 
      ACTS_DEBUG("Invoke fitter");
      auto result =
-         fitTrack(trackSourceLinks, initialParams, chi2Options, surfSequence); // R TODO: where does fitTrack come from?
+         fitTrack(trackSourceLinks, initialParams, chi2Options, surfSequence);
+         // this is a TrackFittingAlgorithm::fitTrack or TrackFittingChi2Algorithm::..
 
      if (result.ok()) {
        // Get the fit output object

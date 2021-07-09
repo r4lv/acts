@@ -60,7 +60,7 @@ class TrackFittingChi2Algorithm final : public BareAlgorithm {
     /// Input measurements collection.
     std::string inputMeasurements;
     /// Boolean determining to use DirectNavigator or standard Navigator
-    bool directNavigation; // TODO: remove
+    // bool directNavigation; // TODO: remove
     /// Input source links collection.
     std::string inputSourceLinks;
     /// Input proto tracks collection, i.e. groups of hit indices.
@@ -70,6 +70,8 @@ class TrackFittingChi2Algorithm final : public BareAlgorithm {
     /// Output fitted trajectories collection.
     std::string outputTrajectories;
     /// Type erased fitter function.
+    unsigned int nUpdates;
+    /// number of update steps
     TrackFitterChi2Function fit;
     /// Type erased direct navigation fitter function
     // DirectedTrackFitterFunction dFit;
